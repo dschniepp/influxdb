@@ -193,6 +193,57 @@ func TestStatementExecutor_NormalizeDeleteSeries(t *testing.T) {
 	}
 }
 
+type mockResourceShower struct {
+	ShowDatabaseFn func(string) bool
+}
+
+func (rs *mockResourceShower) ShowDatabase(name string) bool {
+	return rs.ShowDatabaseFn(name)
+}
+
+func TestQueryExecutor_ExecuteQuery_ShowDatabases(t *testing.T) {
+	qe := influxql.NewQueryExecutor()
+	qe.StatementExecutor = &coordinator.StatementExecutor{
+		MetaClient: &internal.MetaClientMock{
+			DatabasesFn: func() []meta.DatabaseInfo {
+				return []meta.DatabaseInfo{
+					{Name: "db1"}, {Name: "db2"}, {Name: "db3"}, {Name: "db4"},
+				}
+			},
+		},
+	}
+
+	opt := influxql.ExecutionOptions{
+		ResourceShower: &mockResourceShower{
+			ShowDatabaseFn: func(name string) bool {
+				return name == "db2" || name == "db4"
+			},
+		},
+	}
+
+	q, err := influxql.ParseQuery("SHOW DATABASES")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := ReadAllResults(qe.ExecuteQuery(q, opt, make(chan struct{})))
+	exp := []*influxql.Result{
+		{
+			StatementID: 0,
+			Series: []*models.Row{{
+				Name:    "databases",
+				Columns: []string{"name"},
+				Values: [][]interface{}{
+					{"db2"}, {"db4"},
+				},
+			}},
+		},
+	}
+	if !reflect.DeepEqual(results, exp) {
+		t.Fatalf("unexpected results: exp %s, got %s", spew.Sdump(exp), spew.Sdump(results))
+	}
+}
+
 // QueryExecutor is a test wrapper for coordinator.QueryExecutor.
 type QueryExecutor struct {
 	*influxql.QueryExecutor

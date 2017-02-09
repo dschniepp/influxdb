@@ -1417,11 +1417,16 @@ type UserInfo struct {
 
 // Authorize returns true if the user is authorized and false if not.
 func (ui *UserInfo) Authorize(privilege influxql.Privilege, database string) bool {
-	if ui.Admin {
+	if ui.Admin || privilege == influxql.NoPrivileges {
 		return true
 	}
 	p, ok := ui.Privileges[database]
 	return ok && (p == privilege || p == influxql.AllPrivileges)
+}
+
+// ResourceShower returns a ResourceShower for this user, to determine what resources can be returned in SHOW queries.
+func (ui *UserInfo) ResourceShower() influxql.ResourceShower {
+	return resourceShower{ui: ui}
 }
 
 // clone returns a deep copy of si.
@@ -1466,6 +1471,19 @@ func (ui *UserInfo) unmarshal(pb *internal.UserInfo) {
 	for _, p := range pb.GetPrivileges() {
 		ui.Privileges[p.GetDatabase()] = influxql.Privilege(p.GetPrivilege())
 	}
+}
+
+type resourceShower struct {
+	ui *UserInfo
+}
+
+func (rs resourceShower) ShowDatabase(name string) bool {
+	if rs.ui.Admin {
+		return true
+	}
+
+	p := rs.ui.Privileges[name]
+	return p == influxql.AllPrivileges || p == influxql.ReadPrivilege || p == influxql.WritePrivilege
 }
 
 // Lease represents a lease held on a resource.

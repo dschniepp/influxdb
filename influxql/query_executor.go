@@ -59,6 +59,20 @@ func ErrMaxConcurrentQueriesLimitExceeded(n, limit int) error {
 	return fmt.Errorf("max-concurrent-queries limit exceeded(%d, %d)", n, limit)
 }
 
+// ResourceShower reports whether a given resource should be returned in a SHOW query.
+type ResourceShower interface {
+	ShowDatabase(name string) bool
+}
+
+// AllResourceShower is a ResourceShower that allows SHOWing all resources.
+// This is useful when authorization is not enabled on a server.
+type AllResourceShower struct{}
+
+var _ ResourceShower = AllResourceShower{}
+
+// ShowDatabase returns true to indicate that all databases must be returned from SHOW DATABASES.
+func (AllResourceShower) ShowDatabase(string) bool { return true }
+
 // ExecutionOptions contains the options for executing a query.
 type ExecutionOptions struct {
 	// The database the query is running against.
@@ -78,6 +92,9 @@ type ExecutionOptions struct {
 
 	// AbortCh is a channel that signals when results are no longer desired by the caller.
 	AbortCh <-chan struct{}
+
+	// ResourceShower determines whether individual resources should be returned in a SHOW query.
+	ResourceShower ResourceShower
 }
 
 // ExecutionContext contains state that the query is currently executing with.

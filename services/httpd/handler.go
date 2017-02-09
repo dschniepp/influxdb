@@ -389,6 +389,14 @@ func (h *Handler) serveQuery(w http.ResponseWriter, r *http.Request, user *meta.
 		NodeID:    nodeID,
 	}
 
+	if h.Config.AuthEnabled {
+		// Show only what's available to the current user.
+		opts.ResourceShower = user.ResourceShower()
+	} else {
+		// Auth is not enabled, so show everything.
+		opts.ResourceShower = influxql.AllResourceShower{}
+	}
+
 	// Make sure if the client disconnects we signal the query to abort
 	var closing chan struct{}
 	if !async {
